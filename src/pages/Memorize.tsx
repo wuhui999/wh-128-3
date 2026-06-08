@@ -2,7 +2,8 @@ import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGameStore } from '@/store/gameStore';
 import CardButton from '@/components/CardButton';
-import { Suit, SUITS, RANKS, SUIT_DISPLAY, RANK_DISPLAY } from '@/types/game';
+import { Suit, SUITS, RANKS, SUIT_DISPLAY, RANK_DISPLAY, CardState } from '@/types/game';
+import { recognizePattern } from '@/utils/pattern';
 import { cn } from '@/lib/utils';
 import {
   LayoutGrid,
@@ -12,6 +13,11 @@ import {
   CheckCircle2,
   AlertTriangle,
   Crown,
+  Layers,
+  Check,
+  X,
+  Info,
+  AlertCircle,
 } from 'lucide-react';
 
 type ViewMode = 'grid' | 'list';
@@ -19,12 +25,28 @@ type FilterMode = 'all' | 'remaining' | 'played' | 'hand' | 'joker' | 'level';
 
 export default function Memorize() {
   const navigate = useNavigate();
-  const { cards, playCard, unplayCard, getStats, undo, historyIndex, history } = useGameStore();
+  const { cards, playCard, unplayCard, playCards, getStats, undo, historyIndex, history, levelCard } =
+    useGameStore();
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
   const [selectedSuit, setSelectedSuit] = useState<Suit | 'all'>('all');
+  const [batchMode, setBatchMode] = useState(false);
+  const [selectedCards, setSelectedCards] = useState<Set<string>>(new Set());
+  const [error, setError] = useState<string>('');
 
   const stats = getStats();
+
+  const selectedCardStates = useMemo(() => {
+    return Array.from(selectedCards)
+      .map((id) => cards.find((c) => c.card.id === id))
+      .filter(Boolean) as CardState[];
+  }, [selectedCards, cards]);
+
+  const patternPreview = useMemo(() => {
+    if (selectedCardStates.length === 0) return null;
+    const cards = selectedCardStates.map((cs) => cs.card);
+    return recognizePattern(cards, levelCard);
+  }, [selectedCardStates, levelCard]);
 
   const filteredCards = useMemo(() => {
     let result = [...cards];
@@ -72,24 +94,75 @@ export default function Memorize() {
   }, [cards, filterMode, selectedSuit]);
 
   const handleCardClick = (cardId: string) => {
+    setError('');
     const cardState = cards.find((c) => c.card.id === cardId);
     if (!cardState) return;
 
-    if (cardState.played) {
-      unplayCard(cardId);
-    } else if (!cardState.inHand) {
-      if (stats.totalPlayed >= stats.totalCards - stats.totalInHand) {
-        alert('所有牌都已出完！');
+    if (batchMode) {
+      if (cardState.played) {
+        setError('已出牌不能选择');
         return;
       }
-      playCard(cardId);
+      setSelectedCards((prev) => {
+        const next = new Set(prev);
+        if (next.has(cardId)) {
+          next.delete(cardId);
+        } else {
+          next.add(cardId);
+        }
+        return next;
+      });
+    } else {
+      if (cardState.played) {
+        unplayCard(cardId);
+      } else if (!cardState.inHand) {
+        if (stats.totalPlayed >= stats.totalCards - stats.totalInHand) {
+          alert('所有牌都已出完！');
+          return;
+        }
+        playCard(cardId);
+      }
     }
+  };
+
+  const handleConfirmBatch = () => {
+    if (selectedCards.size === 0) {
+      setError('请至少选择一张牌');
+      return;
+    }
+
+    const result = playCards(Array.from(selectedCards));
+    if (result.success) {
+      setSelectedCards(new Set());
+      setError('');
+    } else {
+      setError(result.error || '出牌失败');
+    }
+  };
+
+  const handleCancelBatch = () => {
+    setSelectedCards(new Set());
+    setError('');
+    setBatchMode(false);
   };
 
   const handleQuickUndo = () => {
     if (historyIndex > 0) {
       undo(1);
     }
+  };
+
+  const handleSelectAll = () => {
+    const selectable = filteredCards.filter((c) => !c.played);
+    if (selectable.length === 0) {
+      setError('没有可选择的牌');
+      return;
+    }
+    setSelectedCards(new Set(selectable.map((c) => c.card.id)));
+  };
+
+  const handleClearSelection = () => {
+    setSelectedCards(new Set());
   };
 
   const progress = stats.totalCards > 0 ? (stats.totalPlayed / (stats.totalCards - stats.totalInHand)) * 100 : 0;
@@ -121,13 +194,125 @@ export default function Memorize() {
 
   return (
     <div className="space-y-6">
+      {batchMode && (
+        <div className="bg-gradient-to-r from-indigo-500 to-purple-500 rounded-2xl p-6 text-white shadow-xl">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <Layers className="w-6 h-6" />
+                <h3 className="text-xl font-bold">批量记牌模式</h3>
+              </div>
+              <p className="text-indigo-100 text-sm">
+                点击选择多张牌（含手牌），然后点击「确认出牌」一次性标记
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="text-right">
+                <div className="text-3xl font-bold">{selectedCards.size}</div>
+                <div className="text-xs text-indigo-200">已选择</div>
+              </div>
+              {patternPreview && (
+                <div className="bg-white/20 rounded-lg px-4 py-2 text-center">
+                  <div className="text-sm">{patternPreview.name}</div>
+                  <div className="text-xs opacity-80">{patternPreview.description}</div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {error && (
+            <div className="mt-4 flex items-center gap-2 p-3 bg-red-500/20 border border-white/30 rounded-lg">
+              <AlertCircle className="w-5 h-5" />
+              <span className="text-sm">{error}</span>
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-3 mt-4">
+            <button
+              onClick={handleSelectAll}
+              className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
+            >
+              <Check className="w-4 h-4" />
+              全选当前筛选
+            </button>
+            <button
+              onClick={handleClearSelection}
+              disabled={selectedCards.size === 0}
+              className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors disabled:opacity-50"
+            >
+              <X className="w-4 h-4" />
+              清空选择
+            </button>
+            <div className="flex-1" />
+            <button
+              onClick={handleCancelBatch}
+              className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
+            >
+              <X className="w-4 h-4" />
+              取消
+            </button>
+            <button
+              onClick={handleConfirmBatch}
+              disabled={selectedCards.size === 0}
+              className="flex items-center gap-2 px-6 py-2 bg-white text-indigo-600 font-bold rounded-lg hover:bg-indigo-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+            >
+              <Check className="w-4 h-4" />
+              确认出牌
+            </button>
+          </div>
+
+          {selectedCardStates.length > 0 && (
+            <div className="mt-4 p-3 bg-white/10 rounded-xl">
+              <div className="text-xs text-indigo-200 mb-2">已选牌：</div>
+              <div className="flex flex-wrap gap-1">
+                {selectedCardStates.slice(0, 20).map((cs) => (
+                  <span
+                    key={cs.card.id}
+                    className="px-2 py-1 bg-white/20 rounded text-sm"
+                  >
+                    {cs.card.display}
+                  </span>
+                ))}
+                {selectedCardStates.length > 20 && (
+                  <span className="px-2 py-1 bg-white/20 rounded text-sm">
+                    +{selectedCardStates.length - 20}张
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
           <div>
             <h2 className="text-xl font-bold text-slate-800">记牌面板</h2>
-            <p className="text-sm text-slate-500">点击未出的牌标记为已出，点击已出的牌可撤销</p>
+            <p className="text-sm text-slate-500">
+              {batchMode
+                ? '批量模式：点击选择多张牌，然后确认出牌'
+                : '点击未出的牌标记为已出，点击已出的牌可撤销'}
+            </p>
           </div>
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => {
+                setBatchMode(!batchMode);
+                if (batchMode) {
+                  setSelectedCards(new Set());
+                  setError('');
+                }
+              }}
+              className={cn(
+                'flex items-center gap-2 px-4 py-2 rounded-xl transition-colors font-medium',
+                batchMode
+                  ? 'bg-indigo-500 text-white shadow-md shadow-indigo-500/30'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              )}
+            >
+              <Layers className="w-4 h-4" />
+              批量模式{batchMode ? ' (开)' : ''}
+            </button>
             <button
               onClick={handleQuickUndo}
               disabled={historyIndex <= 0}
@@ -138,6 +323,13 @@ export default function Memorize() {
             </button>
           </div>
         </div>
+
+        {!batchMode && error && (
+          <div className="mb-4 flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700">
+            <AlertCircle className="w-4 h-4" />
+            {error}
+          </div>
+        )}
 
         <div className="mb-6">
           <div className="flex items-center justify-between text-sm mb-2">
@@ -301,6 +493,8 @@ export default function Memorize() {
                 onClick={() => handleCardClick(cardState.card.id)}
                 size="md"
                 showStatus
+                selected={selectedCards.has(cardState.card.id)}
+                disabled={batchMode && cardState.played}
               />
             ))}
           </div>
@@ -312,14 +506,29 @@ export default function Memorize() {
                 onClick={() => handleCardClick(cardState.card.id)}
                 className={cn(
                   'flex items-center justify-between p-3 rounded-xl border-2 transition-all cursor-pointer',
-                  cardState.played
+                  batchMode && selectedCards.has(cardState.card.id)
+                    ? 'bg-indigo-50 border-indigo-400 ring-2 ring-indigo-500 ring-offset-2'
+                    : cardState.played
                     ? 'bg-gray-50 border-gray-200 opacity-50'
                     : cardState.inHand
                     ? 'bg-blue-50 border-blue-200 hover:bg-blue-100'
-                    : 'bg-white border-slate-200 hover:border-emerald-400 hover:bg-emerald-50'
+                    : 'bg-white border-slate-200 hover:border-emerald-400 hover:bg-emerald-50',
+                  batchMode && cardState.played && 'opacity-50 cursor-not-allowed'
                 )}
               >
                 <div className="flex items-center gap-3">
+                  {batchMode && (
+                    <div
+                      className={cn(
+                        'w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0',
+                        selectedCards.has(cardState.card.id)
+                          ? 'bg-indigo-500 border-indigo-500 text-white'
+                          : 'border-slate-300'
+                      )}
+                    >
+                      {selectedCards.has(cardState.card.id) && <Check className="w-3 h-3" />}
+                    </div>
+                  )}
                   <span
                     className={cn(
                       'text-xl font-bold',
@@ -349,8 +558,11 @@ export default function Memorize() {
                       手牌
                     </span>
                   )}
-                  {!cardState.played && !cardState.inHand && (
+                  {!cardState.played && !cardState.inHand && !batchMode && (
                     <span className="text-sm text-emerald-600">点击标记已出</span>
+                  )}
+                  {!cardState.played && batchMode && (
+                    <span className="text-sm text-indigo-600">点击选择</span>
                   )}
                 </div>
               </div>
@@ -386,13 +598,28 @@ export default function Memorize() {
               </div>
               <div className="text-2xl font-bold text-emerald-600">{rank.remaining}</div>
               <div className="text-xs text-slate-500">/ {rank.total}</div>
-              {rank.isLevel && (
-                <div className="text-xs text-amber-600 font-medium mt-1">级牌</div>
-              )}
+              {rank.isLevel && <div className="text-xs text-amber-600 font-medium mt-1">级牌</div>}
             </div>
           ))}
         </div>
       </div>
+
+      {batchMode && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+          <div className="flex items-start gap-3">
+            <Info className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div className="text-sm text-amber-800">
+              <p className="font-medium mb-1">批量模式说明</p>
+              <ul className="list-disc list-inside space-y-1 text-amber-700">
+                <li>支持同时选择多张牌（包括手牌），一次性标记为已出</li>
+                <li>批量操作在撤销栈中算作一步，可整体撤销</li>
+                <li>系统会自动识别牌型（对子、炸弹、顺子等）并记录</li>
+                <li>点击「取消」或切换开关可退出批量模式</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

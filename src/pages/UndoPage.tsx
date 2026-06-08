@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGameStore } from '@/store/gameStore';
 import { cn } from '@/lib/utils';
+import { getPatternIcon } from '@/utils/pattern';
 import {
   Undo2,
   Redo2,
@@ -15,6 +16,7 @@ import {
   CheckCircle2,
   ArrowLeft,
   ArrowRight,
+  Layers,
 } from 'lucide-react';
 
 export default function UndoPage() {
@@ -39,6 +41,8 @@ export default function UndoPage() {
         return <Play className="w-4 h-4" />;
       case 'play':
         return <Plus className="w-4 h-4" />;
+      case 'playBatch':
+        return <Layers className="w-4 h-4" />;
       case 'unplay':
         return <Minus className="w-4 h-4" />;
       case 'setHand':
@@ -54,6 +58,8 @@ export default function UndoPage() {
         return 'bg-emerald-100 text-emerald-700 border-emerald-200';
       case 'play':
         return 'bg-blue-100 text-blue-700 border-blue-200';
+      case 'playBatch':
+        return 'bg-indigo-100 text-indigo-700 border-indigo-200';
       case 'unplay':
         return 'bg-amber-100 text-amber-700 border-amber-200';
       case 'setHand':
@@ -275,10 +281,21 @@ export default function UndoPage() {
                   </div>
 
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium text-slate-800 truncate">
                         {op.description}
                       </span>
+                      {op.pattern && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-100 text-indigo-700 text-xs rounded-full">
+                          <span>{getPatternIcon(op.pattern.type)}</span>
+                          <span>{op.pattern.name}</span>
+                        </span>
+                      )}
+                      {op.cardIds.length > 1 && (
+                        <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-xs rounded-full">
+                          {op.cardIds.length}张
+                        </span>
+                      )}
                       {isCurrent && (
                         <span className="px-2 py-0.5 bg-indigo-500 text-white text-xs rounded-full flex-shrink-0">
                           当前
@@ -295,6 +312,12 @@ export default function UndoPage() {
                       {formatTime(op.timestamp)}
                       <span className="text-slate-300">•</span>
                       <span>第 {actualIndex + 1} 步</span>
+                      {op.pattern && (
+                        <>
+                          <span className="text-slate-300">•</span>
+                          <span className="text-indigo-600">{op.pattern.description}</span>
+                        </>
+                      )}
                     </div>
                   </div>
 

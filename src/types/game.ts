@@ -17,12 +17,33 @@ export interface CardState {
   inHand: boolean;
 }
 
+export type OperationType = 'play' | 'unplay' | 'setHand' | 'init' | 'playBatch';
+
+export type PatternType =
+  | 'single'
+  | 'pair'
+  | 'triple'
+  | 'tripleWithPair'
+  | 'straight'
+  | 'flush'
+  | 'straightFlush'
+  | 'bomb'
+  | 'jokerBomb'
+  | 'unknown';
+
+export interface PatternInfo {
+  type: PatternType;
+  name: string;
+  description: string;
+}
+
 export interface Operation {
   id: string;
-  type: 'play' | 'unplay' | 'setHand' | 'init';
+  type: OperationType;
   timestamp: number;
   description: string;
   cardIds: string[];
+  pattern?: PatternInfo;
 }
 
 export interface GameState {
@@ -39,6 +60,7 @@ export interface GameState {
 export interface GameStore extends GameState {
   initGame: (levelCard: Rank, playerCount: 2 | 3 | 4, handCardIds: string[]) => void;
   playCard: (cardId: string) => void;
+  playCards: (cardIds: string[]) => { success: boolean; error?: string };
   unplayCard: (cardId: string) => void;
   undo: (steps?: number) => void;
   redo: () => void;

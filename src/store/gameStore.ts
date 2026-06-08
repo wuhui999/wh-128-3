@@ -5,6 +5,7 @@ import {
   GameStore,
   GameState,
   Rank,
+  Card,
   CardState,
   Operation,
   GameStats,
@@ -15,6 +16,7 @@ import {
   RANKS,
 } from '@/types/game';
 import { generateDeck, generateId } from '@/utils/cards';
+import { recognizePattern } from '@/utils/pattern';
 
 const STORAGE_KEY = 'guandan-memorizer-game';
 
@@ -258,6 +260,63 @@ export const useGameStore = create<GameStore>()(
           });
           return saveToHistory(newState);
         });
+      },
+
+      playCards: (cardIds: string[]) => {
+        const state = get();
+
+        const playedCards = cardIds.filter((id) => {
+          const cs = state.cards.find((c) => c.card.id === id);
+          return cs?.played;
+        });
+        if (playedCards.length > 0) {
+          return {
+            success: false,
+            error: `所选牌中有${playedCards.length}张已出牌，无法重复标记`,
+          };
+        }
+
+        const totalPlayed = state.cards.filter((c) => c.played).length;
+        const maxPlayable = state.cards.length - state.cards.filter((c) => c.inHand).length;
+        if (totalPlayed + cardIds.length > maxPlayable) {
+          return {
+            success: false,
+            error: `出牌数超出上限，最多还能出${maxPlayable - totalPlayed}张`,
+          };
+        }
+
+        const cards = cardIds
+          .map((id) => state.cards.find((c) => c.card.id === id)?.card)
+          .filter(Boolean) as Card[];
+
+        const pattern = recognizePattern(cards, state.levelCard);
+        const cardDisplay = cards.slice(0, 3).map((c) => c.display).join('、');
+        const moreText = cards.length > 3 ? `等${cards.length}张` : '';
+
+        set((state) => {
+          const newState = produce(state, (draft) => {
+            cardIds.forEach((cardId) => {
+              const card = draft.cards.find((c) => c.card.id === cardId);
+              if (card) {
+                card.played = true;
+                card.inHand = false;
+              }
+            });
+
+            const operation: Operation = {
+              id: generateId(),
+              type: 'playBatch',
+              timestamp: Date.now(),
+              description: `批量出牌：${cardDisplay}${moreText}（${pattern.name}）`,
+              cardIds,
+              pattern,
+            };
+            draft.operations.push(operation);
+          });
+          return saveToHistory(newState);
+        });
+
+        return { success: true };
       },
 
       undo: (steps: number = 1) => {
