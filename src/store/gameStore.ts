@@ -214,8 +214,8 @@ export const useGameStore = create<GameStore>()(
         const totalPlayed = state.cards.filter((c) => c.played).length;
         if (totalPlayed >= state.cards.length) return;
 
-        set((state) =>
-          produce(state, (draft) => {
+        set((state) => {
+          const newState = produce(state, (draft) => {
             const card = draft.cards.find((c) => c.card.id === cardId);
             if (card) {
               card.played = true;
@@ -230,9 +230,9 @@ export const useGameStore = create<GameStore>()(
               };
               draft.operations.push(operation);
             }
-            return saveToHistory(draft);
-          })
-        );
+          });
+          return saveToHistory(newState);
+        });
       },
 
       unplayCard: (cardId: string) => {
@@ -240,8 +240,8 @@ export const useGameStore = create<GameStore>()(
         const cardState = state.cards.find((c) => c.card.id === cardId);
         if (!cardState || !cardState.played) return;
 
-        set((state) =>
-          produce(state, (draft) => {
+        set((state) => {
+          const newState = produce(state, (draft) => {
             const card = draft.cards.find((c) => c.card.id === cardId);
             if (card) {
               card.played = false;
@@ -255,9 +255,9 @@ export const useGameStore = create<GameStore>()(
               };
               draft.operations.push(operation);
             }
-            return saveToHistory(draft);
-          })
-        );
+          });
+          return saveToHistory(newState);
+        });
       },
 
       undo: (steps: number = 1) => {
