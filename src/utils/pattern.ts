@@ -77,8 +77,8 @@ export function recognizePattern(cards: Card[], levelCard: Rank): PatternInfo {
       };
     }
     if (counts.length === 2 && counts[1] === 2) {
-      const tripleRank = Object.keys(rankCounts).find((r) => rankCounts[r] === 3)[0];
-      const pairRank = Object.keys(rankCounts).find((r) => rankCounts[r] === 2)[0];
+      const tripleRank = Object.keys(rankCounts).find((r) => rankCounts[r] === 3)!;
+      const pairRank = Object.keys(rankCounts).find((r) => rankCounts[r] === 2)!;
       return {
         type: 'tripleWithPair',
         name: '三带二',
@@ -88,7 +88,7 @@ export function recognizePattern(cards: Card[], levelCard: Rank): PatternInfo {
   }
 
   if (counts[0] >= 4) {
-    const bombRank = Object.keys(rankCounts).find((r) => rankCounts[r] === counts[0])[0];
+    const bombRank = Object.keys(rankCounts).find((r) => rankCounts[r] === counts[0])!;
     const isLevel = bombRank === levelCard;
     return {
       type: 'bomb',

@@ -9,6 +9,38 @@ import {
   CardState,
   Operation,
 } from '@/types/game';
+
+export interface PlayCardsValidationResult {
+  success: boolean;
+  error?: string;
+}
+
+export function validatePlayCards(
+  cardIds: string[],
+  cards: CardState[]
+): PlayCardsValidationResult {
+  const playedCards = cardIds.filter((id) => {
+    const cs = cards.find((c) => c.card.id === id);
+    return cs?.played;
+  });
+  if (playedCards.length > 0) {
+    return {
+      success: false,
+      error: `所选牌中有${playedCards.length}张已出牌，无法重复标记`,
+    };
+  }
+
+  const totalPlayed = cards.filter((c) => c.played).length;
+  const maxPlayable = cards.length - cards.filter((c) => c.inHand).length;
+  if (totalPlayed + cardIds.length > maxPlayable) {
+    return {
+      success: false,
+      error: `出牌数超出上限，最多还能出${maxPlayable - totalPlayed}张`,
+    };
+  }
+
+  return { success: true };
+}
 import { generateDeck, generateId } from '@/utils/cards';
 import { recognizePattern } from '@/utils/pattern';
 import { calculateStats } from '@/utils/stats';
@@ -149,24 +181,9 @@ export const useGameStore = create<GameStore>()(
       playCards: (cardIds: string[]) => {
         const state = get();
 
-        const playedCards = cardIds.filter((id) => {
-          const cs = state.cards.find((c) => c.card.id === id);
-          return cs?.played;
-        });
-        if (playedCards.length > 0) {
-          return {
-            success: false,
-            error: `所选牌中有${playedCards.length}张已出牌，无法重复标记`,
-          };
-        }
-
-        const totalPlayed = state.cards.filter((c) => c.played).length;
-        const maxPlayable = state.cards.length - state.cards.filter((c) => c.inHand).length;
-        if (totalPlayed + cardIds.length > maxPlayable) {
-          return {
-            success: false,
-            error: `出牌数超出上限，最多还能出${maxPlayable - totalPlayed}张`,
-          };
+        const validation = validatePlayCards(cardIds, state.cards);
+        if (!validation.success) {
+          return validation;
         }
 
         const cards = cardIds
