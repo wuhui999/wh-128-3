@@ -8,15 +8,10 @@ import {
   Card,
   CardState,
   Operation,
-  GameStats,
-  SuitStats,
-  RankStats,
-  BombPossibility,
-  SUITS,
-  RANKS,
 } from '@/types/game';
 import { generateDeck, generateId } from '@/utils/cards';
 import { recognizePattern } from '@/utils/pattern';
+import { calculateStats } from '@/utils/stats';
 
 const STORAGE_KEY = 'guandan-memorizer-game';
 
@@ -58,118 +53,7 @@ function saveToHistory(state: GameState): GameState {
   };
 }
 
-function calculateStats(state: GameState): GameStats {
-  const { cards, levelCard } = state;
 
-  const totalCards = cards.length;
-  const totalPlayed = cards.filter((c) => c.played).length;
-  const totalRemaining = cards.filter((c) => !c.played && !c.inHand).length;
-  const totalInHand = cards.filter((c) => c.inHand).length;
-
-  const jokers = {
-    small: { total: 0, played: 0, remaining: 0 },
-    big: { total: 0, played: 0, remaining: 0 },
-  };
-
-  cards.forEach((c) => {
-    if (c.card.isJoker) {
-      const type = c.card.rank as 'small' | 'big';
-      jokers[type].total++;
-      if (c.played) jokers[type].played++;
-      else if (!c.inHand) jokers[type].remaining++;
-    }
-  });
-
-  const levelCards = { total: 0, played: 0, remaining: 0 };
-  cards.forEach((c) => {
-    if (!c.card.isJoker && c.card.rank === levelCard) {
-      levelCards.total++;
-      if (c.played) levelCards.played++;
-      else if (!c.inHand) levelCards.remaining++;
-    }
-  });
-
-  const suits: SuitStats[] = SUITS.map((suit) => {
-    const suitCards = cards.filter((c) => !c.card.isJoker && c.card.suit === suit);
-    return {
-      suit,
-      total: suitCards.length,
-      played: suitCards.filter((c) => c.played).length,
-      remaining: suitCards.filter((c) => !c.played && !c.inHand).length,
-    };
-  });
-
-  const ranks: RankStats[] = [];
-  RANKS.forEach((rank) => {
-    const rankCards = cards.filter((c) => !c.card.isJoker && c.card.rank === rank);
-    ranks.push({
-      rank,
-      total: rankCards.length,
-      played: rankCards.filter((c) => c.played).length,
-      remaining: rankCards.filter((c) => !c.played && !c.inHand).length,
-      isLevel: rank === levelCard,
-      isJoker: false,
-    });
-  });
-  ranks.push({
-    rank: 'small',
-    total: jokers.small.total,
-    played: jokers.small.played,
-    remaining: jokers.small.remaining,
-    isLevel: false,
-    isJoker: true,
-  });
-  ranks.push({
-    rank: 'big',
-    total: jokers.big.total,
-    played: jokers.big.played,
-    remaining: jokers.big.remaining,
-    isLevel: false,
-    isJoker: true,
-  });
-
-  const bombPossibilities: BombPossibility[] = [];
-
-  const jokerRemaining = jokers.small.remaining + jokers.big.remaining;
-  if (jokerRemaining >= 2) {
-    bombPossibilities.push({
-      rank: 'joker',
-      remaining: jokerRemaining,
-      required: 2,
-      probability: jokerRemaining >= 4 ? 'high' : jokerRemaining >= 3 ? 'medium' : 'low',
-      description: `王炸剩余${jokerRemaining}张${jokerRemaining >= 4 ? '，天王炸可能' : jokerRemaining >= 3 ? '，三王可能' : ''}`,
-    });
-  }
-
-  RANKS.forEach((rank) => {
-    const rankStat = ranks.find((r) => r.rank === rank)!;
-    if (rankStat.remaining >= 4) {
-      bombPossibilities.push({
-        rank,
-        remaining: rankStat.remaining,
-        required: 4,
-        probability: rankStat.remaining >= 6 ? 'high' : rankStat.remaining >= 5 ? 'medium' : 'low',
-        description: `${rank === levelCard ? '级牌' : ''}${rank}剩余${rankStat.remaining}张${rankStat.remaining >= 6 ? '，六张炸可能' : rankStat.remaining >= 5 ? '，五张炸可能' : '，四张炸可能'}`,
-      });
-    }
-  });
-
-  const keyCardsRemaining = cards.filter((c) => !c.played && !c.inHand && (c.card.isJoker || c.card.rank === levelCard));
-
-  return {
-    totalCards,
-    totalPlayed,
-    totalRemaining,
-    totalInHand,
-    levelCard,
-    jokers,
-    levelCards,
-    suits,
-    ranks,
-    bombPossibilities,
-    keyCardsRemaining,
-  };
-}
 
 export const useGameStore = create<GameStore>()(
   persist(

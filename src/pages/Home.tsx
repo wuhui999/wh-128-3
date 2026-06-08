@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGameStore } from '@/store/gameStore';
-import { generateDeck } from '@/utils/cards';
-import { Rank, RANKS, Card, CardState } from '@/types/game';
+import { generateDeck, sortCards } from '@/utils/cards';
+import { Rank, RANKS, Card } from '@/types/game';
 import CardButton from '@/components/CardButton';
 import { Upload, Play, Users, Crown, Hand, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -90,25 +90,7 @@ export default function Home() {
 
   const stats = initialized ? getStats() : null;
 
-  const sortedDeck = [...previewDeck].sort((a, b) => {
-    if (a.isJoker && b.isJoker) {
-      return a.rank === 'big' ? 1 : -1;
-    }
-    if (a.isJoker) return 1;
-    if (b.isJoker) return -1;
-
-    const rankOrder: Record<string, number> = {
-      '3': 0, '4': 1, '5': 2, '6': 3, '7': 4, '8': 5, '9': 6,
-      '10': 7, 'J': 8, 'Q': 9, 'K': 10, 'A': 11, '2': 12,
-    };
-    const suitOrder: Record<string, number> = {
-      spade: 0, heart: 1, club: 2, diamond: 3,
-    };
-
-    const rankDiff = rankOrder[a.rank as string] - rankOrder[b.rank as string];
-    if (rankDiff !== 0) return rankDiff;
-    return suitOrder[a.suit as string] - suitOrder[b.suit as string];
-  });
+  const sortedDeck = sortCards(previewDeck);
 
   if (initialized && cards.length > 0) {
     return (

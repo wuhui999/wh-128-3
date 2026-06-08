@@ -2,8 +2,9 @@ import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGameStore } from '@/store/gameStore';
 import CardButton from '@/components/CardButton';
-import { Suit, SUITS, RANKS, SUIT_DISPLAY, RANK_DISPLAY, CardState } from '@/types/game';
+import { Suit, SUITS, SUIT_DISPLAY, RANK_DISPLAY, CardState } from '@/types/game';
 import { recognizePattern } from '@/utils/pattern';
+import { sortCardStates } from '@/utils/cards';
 import { cn } from '@/lib/utils';
 import {
   LayoutGrid,
@@ -73,22 +74,7 @@ export default function Memorize() {
       result = result.filter((c) => !c.card.isJoker && c.card.suit === selectedSuit);
     }
 
-    result.sort((a, b) => {
-      if (a.card.isJoker && b.card.isJoker) {
-        return a.card.rank === 'big' ? 1 : -1;
-      }
-      if (a.card.isJoker) return 1;
-      if (b.card.isJoker) return -1;
-
-      const rankOrder: Record<string, number> = {};
-      RANKS.forEach((r, i) => (rankOrder[r] = i));
-      const suitOrder: Record<string, number> = {};
-      SUITS.forEach((s, i) => (suitOrder[s] = i));
-
-      const rankDiff = rankOrder[a.card.rank as string] - rankOrder[b.card.rank as string];
-      if (rankDiff !== 0) return rankDiff;
-      return suitOrder[a.card.suit as string] - suitOrder[b.card.suit as string];
-    });
+    result = sortCardStates(result);
 
     return result;
   }, [cards, filterMode, selectedSuit]);
